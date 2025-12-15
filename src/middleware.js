@@ -3,7 +3,8 @@ import { NextResponse } from "next/server";
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
 // Root app/dashboard domain
-const ROOT_DOMAIN = "qr.foodsnap.in"; // or from env
+const ROOT_DOMAIN =
+  process.env.NEXT_PUBLIC_ROOT_DOMAIN || "kravy-qr-menu.vercel.app";
 
 const isPublicRoute = createRouteMatcher([
   "/login(.*)",
