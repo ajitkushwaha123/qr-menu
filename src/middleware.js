@@ -2,28 +2,24 @@
 import { NextResponse } from "next/server";
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
+// Root app/dashboard domain
+const ROOT_DOMAIN = "qr.foodsnap.in"; // or from env
+
 const isPublicRoute = createRouteMatcher([
   "/login(.*)",
   "/register(.*)",
-  "/", // marketing homepage on root domain
+  "/pricing(.*)",
 ]);
 
-const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN;
-
 function getSubdomain(hostname) {
-  // handle localhost and production separately if needed
   if (!hostname) return null;
+  const host = hostname.split(":")[0];
+  const parts = host.split(".");
 
-  // example hostnames:
-  // - "qr-menu.in"              -> no subdomain
-  // - "demo.qr-menu.in"         -> "demo"
-  // - "demo.preview.vercel.app" -> handle differently if you want
-  const parts = hostname.split(":")[0].split(".");
-
-  // "qr-menu.in" => ["qr-menu","in"] -> no subdomain
+  // "qr.foodsnap.in" -> no subdomain
   if (parts.length <= 2) return null;
 
-  // "demo.qr-menu.in" => ["demo","qr-menu","in"] -> "demo"
+  // "demo.qr.foodsnap.in" -> "demo"
   return parts[0];
 }
 
@@ -32,22 +28,25 @@ export default clerkMiddleware(async (auth, req) => {
   const hostname = req.headers.get("host") || "";
   const subdomain = getSubdomain(hostname);
 
-  // 1) Auth
-  if (!isPublicRoute(req)) {
-    await auth.protect();
-  }
-
-  // 2) If no subdomain => root app (dashboard/marketing)
-  if (!subdomain) {
+  // ----- ROOT DOMAIN: qr.foodsnap.in -----
+  if (!subdomain && hostname === ROOT_DOMAIN) {
+    // Protect non‑public routes with Clerk
+    if (!isPublicRoute(req)) {
+      await auth.protect();
+    }
     return NextResponse.next();
   }
 
-  // 3) Subdomain => tenant website
-  // Rewrite demo.qr-menu.in/menu -> /tenant/demo/menu
-  const path = url.pathname === "/" ? "" : url.pathname;
-  url.pathname = `/tenant/${subdomain}${path}`;
+  // ----- TENANT SUBDOMAINS: slug.qr.foodsnap.in -----
+  if (subdomain) {
+    // Public customer-facing site (no auth)
+    const path = url.pathname === "/" ? "" : url.pathname;
+    url.pathname = `/tenant/${subdomain}${path}`;
+    return NextResponse.rewrite(url);
+  }
 
-  return NextResponse.rewrite(url);
+  // Fallback (e.g. localhost, previews)
+  return NextResponse.next();
 });
 
 export const config = {
